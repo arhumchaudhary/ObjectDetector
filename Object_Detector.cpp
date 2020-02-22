@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
 	int cnt = 0;
 	float p;
 
-
+	//RANSAC framework
 	std::vector < cv::Point2f > ptsA1, ptsB1;
 	double dist;
 	std::vector < cv::Point2f> ptsApro;
