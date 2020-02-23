@@ -23,7 +23,7 @@ using namespace std;
 
 
 const int MAX_FEATURES = 500;
-const float GOOD_MATCH_PERCENT = 0.15f;
+const float GOOD_MATCH_PERCENT = 0.04f;
 
 
 Mat loadImage(String img) {
@@ -86,11 +86,11 @@ Mat getSimilarityMatrix(std::vector<Point2f> ptsA, std::vector<Point2f> ptsB, fl
 
 int main(int argc, char** argv) {
 
-	Mat imgA = imread("box.png", IMREAD_GRAYSCALE);
-	Mat imgB = imread("box_in_scene.png", IMREAD_GRAYSCALE);
+	Mat imgA = imread("painting.png");
+	Mat imgB = imread("paintingbkd.png");
 
 
-	int nfeatures = 500;
+	int nfeatures = 1000;
 	float scaleFactor = 1.2f;
 	int nlevels = 8;
 	int edgeThreshold = 31;
@@ -127,34 +127,46 @@ int main(int argc, char** argv) {
 
 	drawMatches(imgA, kp_object, imgB, kp_scene, matches, output);
 
+	std::vector<Point2f> obj;
+	std::vector<Point2f> scene;
+
+
 	float scale, theta, tx, ty;
 	std::vector < cv::Point2f > ptsA, ptsB;
-	
+
 	//to get the points from the "matches"
 	for (int i = 0; i < (int)matches.size(); i++)
 	{
 		ptsA.push_back(kp_object[matches[i].queryIdx].pt);
-		ptsB.push_back(kp_scene[matches[i].queryIdx].pt);
+		ptsB.push_back(kp_scene[matches[i].trainIdx].pt);
 	}
+
 
 	srand(time(NULL));
 	int r_idx;
 	int r_idx2;
-	
-	int k = 10000;
+
+	int k = 4000;
 	int m = 4;
-	int t = 50;
+	int t = 90;
 	int cnt = 0;
 	float p;
+	float p_th = 0.1;
 
-	//RANSAC framework
-	std::vector < cv::Point2f > ptsA1, ptsB1;
+
+	Mat bestMatrix;
+	int bestInlier = 0;
+
+	std::vector < cv::Point2f > ptsA1, ptsB1, ptsInlier;
 	double dist;
 	std::vector < cv::Point2f> ptsApro;
+
+	Mat H = findHomography(ptsA, ptsB, RANSAC);
 	while (cnt < k) {
 
 		cnt++;
-		float  inlier = 0;
+		int inlier = 0;
+		ptsInlier.clear();
 
 		for (int i = 0; i < m; i++) {
 			r_idx = rand() % (matches.size());
@@ -162,32 +174,80 @@ int main(int argc, char** argv) {
 			ptsB1.push_back(ptsB[r_idx]);
 		}
 
+
 		cv::Mat mySimilarityMatrix = getSimilarityMatrix(ptsA1, ptsB1, scale, theta, tx, ty);
 		cv::perspectiveTransform(ptsA, ptsApro, mySimilarityMatrix);
 
 
 		for (int i = 0; i < ptsApro.size(); i++) {
-			dist = sqrt(pow(ptsApro[i].x - (ptsB1[i].x), 2) + (pow(ptsApro[i].y - (ptsB1[i].y), 2)));
-			//cout << dist << endl;
+			dist = sqrt(pow(ptsApro[i].x - ptsB[i].x, 2) + (pow(ptsApro[i].y - ptsB[i].y, 2)));
+
 			if (dist < t) {
 				inlier++;
+			}
+
 		}
-			p = inlier / ptsApro.size();
-			// [Optional] Create a display window
-			cout << p << endl;
+
+		p = inlier / float(ptsApro.size());
+		//cout << p << endl;
+		if (p > p_th) {
+			//bestInlier = inlier;
+			p_th = p;
+			bestMatrix = mySimilarityMatrix;
+			cout << "Better M:" << bestMatrix << endl;
 		}
+
+		if (cnt == k / 3)
+			cout << "1/3 done" << endl;
+		else if (cnt == k / 2)
+			cout << "50% done" << endl;
+		else if (cnt == 0.75 * k)
+			cout << "75% done" << endl;
+		else if (cnt == 0.9 * k)
+			cout << "90% done" << endl;
 	}
 
+	cout << H << endl;
+	cout << bestMatrix<< endl;
+
+	cv::Point pt1(0, 0);
+	cv::Point pt2(imgA.cols, imgA.rows);
+	Mat blueRect = Mat::zeros(imgA.size(),CV_8UC3);
+	
+	cv::rectangle(blueRect, pt1, pt2, cv::Scalar(255, 0, 0),-1); 
+
+	Mat img_aligned = Mat(imgB.size(),CV_8UC3);
+	warpPerspective(blueRect, img_aligned, H, imgB.size(), INTER_LINEAR);
+
+	Mat newImgB = imgB.clone();
+
+	cv::addWeighted(img_aligned, 0.2, imgB, 0.8, 0.0, newImgB);
+
+	Mat img_aligned2 = Mat(imgB.size(), CV_8UC3);
+	warpPerspective(blueRect, img_aligned2, bestMatrix, imgB.size(), INTER_LINEAR);
+
+	Mat newImgB2 = imgB.clone();
+
+	cv::addWeighted(img_aligned2, 0.2, imgB, 0.8, 0.0, newImgB2);
+	
 
 	namedWindow("Image A", cv::WINDOW_AUTOSIZE);
 	imshow("Image A", imgA);
 	namedWindow("Image B", cv::WINDOW_AUTOSIZE);
 	imshow("Image B", imgB);
-
+	namedWindow("Blue Rect", cv::WINDOW_AUTOSIZE);
+	imshow("Blue Rect", blueRect); 
+	namedWindow("aligned", cv::WINDOW_AUTOSIZE);
+	imshow("aligned", img_aligned);
+	namedWindow("overlay", cv::WINDOW_AUTOSIZE);
+	imshow("overlay", newImgB);
+	namedWindow("overlay2", cv::WINDOW_AUTOSIZE);
+	imshow("overlay2", newImgB2);
 	namedWindow("Combined", cv::WINDOW_AUTOSIZE);
 	imshow("Combined", output);
+    
+    imwrite("/result.jpg", newImgB2);
 
 	cv::waitKey();
 	return 0;
 }
-
