@@ -246,7 +246,8 @@ int main(int argc, char** argv) {
 	namedWindow("Combined", cv::WINDOW_AUTOSIZE);
 	imshow("Combined", output);
     
-    imwrite("/result.jpg", newImgB2);
+    	imwrite("/result.png", newImgB2);
+	imwrite("/matches.png", output);
 
 	cv::waitKey();
 	return 0;
