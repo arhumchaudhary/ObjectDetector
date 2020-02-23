@@ -247,7 +247,6 @@ int main(int argc, char** argv) {
 	imshow("Combined", output);
     
     	imwrite("/result.png", newImgB2);
-	imwrite("/matches.png", output);
 
 	cv::waitKey();
 	return 0;
